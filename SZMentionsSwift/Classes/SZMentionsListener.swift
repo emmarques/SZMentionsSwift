@@ -371,7 +371,7 @@ extension SZMentionsListener {
         if let editedMention = mentions.mentionBeingEdited(atRange: range) {
             clearMention(editedMention)
 
-            shouldAdjust = handleEditingMention(editedMention, textView: textView, range: range, text: text)
+            shouldAdjust = handleEditingMention(editedMention, textView: textView, range: editedMention.mentionRange, text: text)
         }
 
         mentions.adjustMentions(forTextChangeAtRange: range, text: text)
