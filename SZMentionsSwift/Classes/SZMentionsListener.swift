@@ -291,6 +291,7 @@ extension SZMentionsListener {
      @param range: the selected range
      */
     fileprivate func adjust(_ textView: UITextView, range: NSRange) {
+        guard mentions.mentionBeingEdited(atRange: range) == nil else { return }
         let string = (textView.text as NSString).substring(to: range.location)
         var textBeforeTrigger = " "
         let rangeTuple = string.range(of: triggers, options: NSString.CompareOptions.backwards)
