@@ -291,7 +291,11 @@ extension SZMentionsListener {
      @param range: the selected range
      */
     fileprivate func adjust(_ textView: UITextView, range: NSRange) {
-        guard mentions.mentionBeingEdited(atRange: range) == nil else { return }
+        guard mentions.filter({
+            NSIntersectionRange(range, $0.mentionRange).length > 0 ||
+                (range.location + range.length) >= $0.mentionRange.location &&
+                (range.location + range.length) <= ($0.mentionRange.location + $0.mentionRange.length)
+        }).count == 0 else { return }
         let string = (textView.text as NSString).substring(to: range.location)
         var textBeforeTrigger = " "
         let rangeTuple = string.range(of: triggers, options: NSString.CompareOptions.backwards)
@@ -370,8 +374,8 @@ extension SZMentionsListener {
 
         if let editedMention = mentions.mentionBeingEdited(atRange: range) {
             clearMention(editedMention)
-
-            shouldAdjust = handleEditingMention(editedMention, textView: textView, range: editedMention.mentionRange, text: text)
+    
+            shouldAdjust = handleEditingMention(editedMention, textView: textView, range: range, text: text)
         }
 
         mentions.adjustMentions(forTextChangeAtRange: range, text: text)
