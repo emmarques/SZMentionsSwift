@@ -282,6 +282,14 @@ extension SZMentionsListener {
         }
         textView.text = ""
     }
+    
+    fileprivate func rangeIntersects(_ range: NSRange) -> Bool {
+        return mentions.filter({
+            NSIntersectionRange(range, $0.mentionRange).length > 0 ||
+                (range.location + range.length) >= $0.mentionRange.location &&
+                (range.location + range.length) <= ($0.mentionRange.location + $0.mentionRange.length)
+        }).count > 0
+    }
 
     /**
      @brief Uses the text view to determine the current mention being adjusted based on
@@ -291,15 +299,12 @@ extension SZMentionsListener {
      @param range: the selected range
      */
     fileprivate func adjust(_ textView: UITextView, range: NSRange) {
-        guard mentions.filter({
-            NSIntersectionRange(range, $0.mentionRange).length > 0 ||
-                (range.location + range.length) >= $0.mentionRange.location &&
-                (range.location + range.length) <= ($0.mentionRange.location + $0.mentionRange.length)
-        }).count == 0 else { return }
+        guard !rangeIntersects(range) else { return }
         let string = (textView.text as NSString).substring(to: range.location)
         var textBeforeTrigger = " "
         let rangeTuple = string.range(of: triggers, options: NSString.CompareOptions.backwards)
-        guard let location = rangeTuple.range?.location, let trigger = rangeTuple.foundString else { return }
+        guard let range = rangeTuple.range, let trigger = rangeTuple.foundString, !rangeIntersects(range) else { return }
+        let location = range.location
         let substring = (string as NSString)
         
         mentionEnabled = false
@@ -352,6 +357,7 @@ extension SZMentionsListener {
             editingMention = true
             mutableMentions.remove(at: index)
         }
+        
         if let mutableAttributedString = mentionsTextView.attributedText.mutableCopy() as? NSMutableAttributedString {
             mutableAttributedString.apply(defaultTextAttributes, range: mention.mentionRange)
             mentionsTextView.attributedText = mutableAttributedString
@@ -367,33 +373,37 @@ extension SZMentionsListener {
      */
     @discardableResult fileprivate func shouldAdjust(_ textView: UITextView, range: NSRange, text: String) -> Bool {
         var shouldAdjust = true
+        var adjustedRange = range
+        var adjustedText = text
 
         if textView.text.isEmpty { resetEmpty(textView) }
 
         editingMention = false
 
-        if let editedMention = mentions.mentionBeingEdited(atRange: range) {
-            clearMention(editedMention)
-    
-            shouldAdjust = handleEditingMention(editedMention, textView: textView, range: range, text: text)
+        if let editedMentions = mentions.mentionsBeingEdited(atRange: range), editedMentions.count > 0 {
+            editedMentions.forEach { (mention) in
+                clearMention(mention)
+                adjustedRange = NSUnionRange(mention.mentionRange, adjustedRange)
+            }
+
+            adjustedText = text
+            shouldAdjust = handleEditingMention(textView: textView, range: adjustedRange, text: adjustedText)
         }
 
-        mentions.adjustMentions(forTextChangeAtRange: range, text: text)
+        mentions.adjustMentions(forTextChangeAtRange: adjustedRange, text: adjustedText)
 
-        _ = delegate?.textView?(textView, shouldChangeTextIn: range, replacementText: text)
+        _ = delegate?.textView?(textView, shouldChangeTextIn: adjustedRange, replacementText: adjustedText)
 
         return shouldAdjust
     }
 
     /**
-     @brief Resets the attributes of the mention to default attributes
-     @param mention: the mention being edited
+     @brief Resets the attributes of the range to default attributes
      @param textView: the mention text view
      @param range: the current range selected
      @param text: text to replace range
      */
-    private func handleEditingMention(_ mention: SZMention, textView: UITextView,
-                                      range: NSRange, text: String) -> Bool {
+    private func handleEditingMention(textView: UITextView, range: NSRange, text: String) -> Bool {
         if let mutableAttributedString = textView.attributedText.mutableCopy() as? NSMutableAttributedString {
             mutableAttributedString.mutableString.replaceCharacters(in: range, with: text)
             textView.attributedText = mutableAttributedString
